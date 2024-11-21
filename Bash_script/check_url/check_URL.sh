@@ -1,6 +1,4 @@
 #!/bin/bash
-clear
-
 ###############################
 #
 # Parametros:
@@ -13,24 +11,50 @@ clear
 ###############################
 LISTA=$1
 
-LOG_FILE="/var/log/status_url.log"
+LOG_FILE="/var/log/status_URL.log"
+
+DIRECTORIO="/tmp/head-check/"
 
 ANT_IFS=$IFS
 IFS=$'\n'
 
+ 
+
+ if [[ ! -d $DIRECTORIO ]]; then
+	 mkdir -p /tmp/head-check/{Error/{cliente,servidor},ok}
+	 echo "Creando $DIRECTORIO"
+ fi
+
+
 #---- Dentro del bucle ----#
   # Obtener el código de estado HTTP
-  STATUS_CODE=$(curl -LI -o /dev/null -w '%{http_code}\n' -s "$URL")
 
-  # Fecha y hora actual en formato yyyymmdd_hhmmss
-  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+ for LINEA in `cat $LISTA |  grep -v ^#`
+ do
+ 	URL=$(echo $LINEA | awk '{print $2}')
+	DOMINIO=$(echo $LINEA | awk '{print $1}')
+	STATUS_CODE=$(curl -LI -o /dev/null -w '%{http_code}\n' -s "$URL")
+	TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+	#echo "$TIMESTAMP - Code:$STATUS_CODE - URL:$URL" >> $LOG_FILE
+	echo "$TIMESTAMP - Code:$STATUS_CODE - URL:$URL" | sudo tee -a $LOG_FILE
+	
+	if [[ $STATUS_CODE == 200 ]]; then
+		touch "$DIRECTORIO/ok/$DOMINIO.com"
+		echo "$TIMESTAMP - Code:$STATUS_CODE - URL:$URL" >> "$DIRECTORIO/ok/$DOMINIO.com"
+	fi
 
+	if [[ $STATUS_CODE -ge 400 && $STATUS_CODE -le 499 ]]; then
+		touch "$DIRECTORIO/Error/cliente/$DOMINIO.com"
+		echo "$TIMESTAMP - Code:$STATUS_CODE - URL:$URL" >> "$DIRECTORIO/Error/cliente/$DOMINIO.com"
+	fi
 
- # Registrar en el archivo /var/log/status_url.log
-  echo "$TIMESTAMP - Code:$STATUS_CODE - URL:$URL" |sudo tee -a  "$LOG_FILE"
-
-
-
+	if [[ $STATUS_CODE -ge 500 && $STATUS_CODE -le 599 ]]; then
+                touch "$DIRECTORIO/Error/servidor/$DOMINIO.com"
+		echo "$TIMESTAMP - Code:$STATUS_CODE - URL:$URL" >> "$DIRECTORIO/Error/servidor/$DOMINIO.com"
+        fi
+	
+ done
+  
 #-------------------------#
 
 IFS=$ANT_IFS
